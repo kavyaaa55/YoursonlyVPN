@@ -1,0 +1,50 @@
+{
+  "version": "1.0.0",
+  "description": "Adaptive VPN sensitivity rule definitions",
+  "domain_rules": {
+    "critical": [
+      "uidai.gov.in",
+      "incometax.gov.in",
+      "passportindia.gov.in",
+      "digilocker.gov.in",
+      "epfindia.gov.in",
+      "sbi.co.in",
+      "hdfcbank.com",
+      "icicibank.com",
+      "axisbank.com"
+    ],
+    "high": [
+      "paytm.com",
+      "phonepe.com",
+      "gpay.app"
+    ],
+    "low": [
+      "steampowered.com",
+      "epicgames.com",
+      "youtube.com",
+      "netflix.com",
+      "hotstar.com",
+      "jiocinema.com",
+      "primevideo.com",
+      "twitch.tv"
+    ]
+  },
+  "pattern_rules": [
+    { "pattern": ".*\\.gov\\.in$",      "level": "CRITICAL" },
+    { "pattern": ".*bank.*\\.com$",     "level": "HIGH" },
+    { "pattern": ".*pay.*\\.com$",      "level": "HIGH" },
+    { "pattern": ".*finance.*\\.com$",  "level": "HIGH" }
+  ],
+  "path_rules": [
+    { "path": "/payment",   "level": "CRITICAL" },
+    { "path": "/checkout",  "level": "CRITICAL" },
+    { "path": "/transfer",  "level": "CRITICAL" },
+    { "path": "/api/otp",   "level": "CRITICAL" },
+    { "path": "/login",     "level": "HIGH" },
+    { "path": "/signin",    "level": "HIGH" },
+    { "path": "/auth",      "level": "HIGH" },
+    { "path": "/api/user",  "level": "HIGH" },
+    { "path": "/upload",    "level": "MEDIUM" },
+    { "path": "/api/",      "level": "MEDIUM" }
+  ]
+}

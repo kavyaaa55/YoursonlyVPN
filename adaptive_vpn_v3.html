@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Adaptive VPN — Client/Server Demo</title>
+  <style>
+    /* ── CSS variable fallbacks so the file works standalone ── */
+    :root {
+      --color-background-primary:   #1C2128;
+      --color-background-secondary: #161B22;
+      --color-background-tertiary:  #0D1117;
+      --color-border-secondary:     #30363D;
+      --color-border-tertiary:      #21262D;
+      --color-text-primary:         #E6EDF3;
+      --color-text-secondary:       #8B949E;
+      --color-text-tertiary:        #484F58;
+      --border-radius-lg:           12px;
+      --border-radius-md:           6px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--color-background-tertiary);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      padding: 24px;
+    }
+
+    h1.page-title {
+      color: var(--color-text-secondary);
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h1.page-title .shield { font-size: 16px; }
+
+    #root {
+      display: grid;
+      grid-template-columns: 1fr 100px 1fr;
+      grid-template-rows: auto 1fr auto auto;
+      width: 100%;
+      max-width: 900px;
+      height: 600px;
+      background: var(--color-background-tertiary);
+      border-radius: var(--border-radius-lg);
+      border: 0.5px solid var(--color-border-tertiary);
+      overflow: hidden;
+    }
+
+    /* ── Panel headers ── */
+    .panel-header {
+      padding: 12px 16px;
+      border-bottom: 0.5px solid var(--color-border-tertiary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--color-background-primary);
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .dot-blue  { background: #378ADD; }
+    .dot-green { background: #1D9E75; }
+    .panel-label { font-size: 11px; font-weight: 500; color: var(--color-text-secondary); letter-spacing: 0.08em; text-transform: uppercase; }
+    .panel-addr  { font-size: 10px; color: var(--color-text-tertiary); margin-left: auto; }
+
+    /* ── Message areas ── */
+    .messages {
+      padding: 12px;
+      overflow-y: auto;
+      background: var(--color-background-secondary);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .msg-bubble {
+      max-width: 88%;
+      padding: 8px 12px;
+      border-radius: var(--border-radius-md);
+      font-size: 12px;
+      line-height: 1.5;
+      animation: fadeIn 0.2s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+
+    .msg-sent {
+      align-self: flex-end;
+      background: var(--color-background-primary);
+      border: 0.5px solid var(--color-border-secondary);
+      color: var(--color-text-primary);
+    }
+    .msg-recv {
+      align-self: flex-start;
+      background: #0f1e2e;
+      border: 0.5px solid #1e3a5a;
+      color: #90c8f8;
+    }
+
+    .msg-text { word-break: break-word; }
+    .msg-url  { font-size: 10px; color: var(--color-text-tertiary); margin-top: 3px; word-break: break-all; }
+
+    .meta {
+      font-size: 10px;
+      color: var(--color-text-tertiary);
+      margin-top: 5px;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    /* sensitivity level pill */
+    .lvl-pill {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+    .lvl-CRITICAL { background: #3a0a0a; color: #FF4757; border: 0.5px solid #FF475766; }
+    .lvl-HIGH     { background: #2a1500; color: #FF8C00; border: 0.5px solid #FF8C0066; }
+    .lvl-MEDIUM   { background: #2a2200; color: #FFD700; border: 0.5px solid #FFD70066; }
+    .lvl-LOW      { background: #0a2a1e; color: #06D6A0; border: 0.5px solid #06D6A066; }
+
+    .latency-pill {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 9px;
+      font-weight: 500;
+    }
+    .fast { background: #EAF3DE; color: #3B6D11; border: 0.5px solid #C0DD97; }
+    .slow { background: #FAEEDA; color: #854F0B; border: 0.5px solid #FAC775; }
+
+    .cipher-tag {
+      font-size: 9px;
+      color: var(--color-text-tertiary);
+      font-family: monospace;
+    }
+
+    /* ── Input bar ── */
+    .input-bar {
+      grid-column: 1;
+      grid-row: 3;
+      padding: 8px 12px;
+      border-top: 0.5px solid var(--color-border-tertiary);
+      border-bottom: 0.5px solid var(--color-border-tertiary);
+      background: var(--color-background-primary);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .input-row { display: flex; gap: 6px; align-items: center; }
+    .input-bar input, .input-bar select {
+      font-family: inherit;
+      font-size: 12px;
+      background: var(--color-background-secondary);
+      border: 0.5px solid var(--color-border-secondary);
+      border-radius: var(--border-radius-md);
+      padding: 6px 10px;
+      color: var(--color-text-primary);
+      outline: none;
+    }
+    .input-bar input:focus, .input-bar select:focus {
+      border-color: #378ADD;
+      box-shadow: 0 0 0 2px rgba(55,138,221,0.15);
+    }
+    #msg-input  { flex: 1; }
+    #url-input  { flex: 1; font-size: 11px; }
+    #method-sel { width: 72px; font-size: 11px; }
+    #is-msg-lbl { font-size: 10px; color: var(--color-text-tertiary); display: flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
+
+    .send-btn {
+      background: #185FA5;
+      color: #E6F1FB;
+      border: none;
+      border-radius: var(--border-radius-md);
+      padding: 7px 14px;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .send-btn:hover  { background: #0C447C; }
+    .send-btn:active { transform: scale(0.97); }
+    .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Hint / stats row ── */
+    .hint-row {
+      grid-column: 1;
+      grid-row: 4;
+      padding: 5px 14px;
+      background: var(--color-background-primary);
+      font-size: 10px;
+      color: var(--color-text-tertiary);
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .hint-row b { color: var(--color-text-secondary); font-weight: 500; }
+    .api-status {
+      margin-left: auto;
+      font-size: 9px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .api-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #484F58;
+      transition: background 0.3s;
+    }
+    .api-dot.ok  { background: #1D9E75; }
+    .api-dot.err { background: #FF4757; }
+
+    /* ── Tunnel column ── */
+    .tunnel-col {
+      grid-column: 2;
+      grid-row: 1 / 5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: var(--color-background-primary);
+      border-left:  0.5px solid var(--color-border-tertiary);
+      border-right: 0.5px solid var(--color-border-tertiary);
+      gap: 10px;
+      padding: 12px 8px;
+    }
+    .tunnel-label { font-size: 9px; font-weight: 500; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.08em; }
+    .tunnel-pipe {
+      width: 6px;
+      flex: 1;
+      max-height: 200px;
+      border-radius: 3px;
+      background: var(--color-border-tertiary);
+      position: relative;
+      overflow: visible;
+    }
+    .pkt-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      position: absolute;
+      left: -2px;
+      opacity: 0;
+      animation: travel 0.55s ease-in-out forwards;
+    }
+    .pkt-out { background: #185FA5; }
+    .pkt-in  { background: #1D9E75; animation-name: travel-back; }
+    @keyframes travel      { 0%{opacity:0;top:5%}10%{opacity:1}90%{opacity:1}100%{opacity:0;top:92%} }
+    @keyframes travel-back { 0%{opacity:0;top:92%}10%{opacity:1}90%{opacity:1}100%{opacity:0;top:5%} }
+
+    .stats-box {
+      background: var(--color-background-secondary);
+      border: 0.5px solid var(--color-border-tertiary);
+      border-radius: var(--border-radius-md);
+      padding: 8px;
+      width: 84px;
+      font-size: 10px;
+      color: var(--color-text-secondary);
+      line-height: 1.6;
+    }
+    .stats-box span { display: block; }
+    .stats-val { font-weight: 500; color: var(--color-text-primary); font-size: 11px; }
+
+    .enc-badge {
+      background: #0a2a1e;
+      border: 0.5px solid #06D6A066;
+      border-radius: 999px;
+      padding: 3px 7px;
+      font-size: 9px;
+      font-weight: 500;
+      color: #06D6A0;
+      text-align: center;
+      transition: all 0.3s;
+      white-space: nowrap;
+    }
+
+    /* ── Server side ── */
+    .server-header { grid-column: 3; grid-row: 1; }
+    .server-msgs   { grid-column: 3; grid-row: 2 / 5; }
+    .server-msgs .msg-recv { align-self: flex-end; }
+
+    .empty-hint {
+      color: var(--color-text-tertiary);
+      font-size: 11px;
+      text-align: center;
+      margin: auto;
+      opacity: 0.5;
+    }
+
+    /* scrollbar */
+    .messages::-webkit-scrollbar { width: 4px; }
+    .messages::-webkit-scrollbar-track { background: transparent; }
+    .messages::-webkit-scrollbar-thumb { background: var(--color-border-tertiary); border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<h1 class="page-title"><span class="shield">🛡</span> Adaptive VPN — Client / Server Demo</h1>
+
+<div id="root">
+
+  <!-- Client header -->
+  <div class="panel-header" style="grid-column:1;grid-row:1;">
+    <div class="dot dot-blue"></div>
+    <span class="panel-label">Client</span>
+    <span class="panel-addr">192.168.1.10:4500</span>
+  </div>
+
+  <!-- Client messages -->
+  <div class="messages" style="grid-column:1;grid-row:2;" id="client-msgs">
+    <div class="empty-hint">Type below and press Send.</div>
+  </div>
+
+  <!-- Input bar -->
+  <div class="input-bar">
+    <!-- Row 1: URL + method -->
+    <div class="input-row">
+      <input id="url-input" type="text" placeholder="URL (optional) — e.g. https://uidai.gov.in" />
+      <select id="method-sel">
+        <option>GET</option><option>POST</option><option>PUT</option>
+        <option>DELETE</option><option>PATCH</option>
+      </select>
+      <label id="is-msg-lbl">
+        <input type="checkbox" id="is-msg-chk" /> chat
+      </label>
+    </div>
+    <!-- Row 2: message + send -->
+    <div class="input-row">
+      <input id="msg-input" type="text" placeholder="Message / request body…" maxlength="200" />
+      <button class="send-btn" id="send-btn">Send ↗</button>
+    </div>
+  </div>
+
+  <!-- Stats row -->
+  <div class="hint-row">
+    <span>Packets: <b id="pkt-count">0</b></span>
+    <span>Avg RTT: <b id="avg-rtt">—</b></span>
+    <div class="api-status">
+      <div class="api-dot" id="api-dot"></div>
+      <span id="api-label">API</span>
+    </div>
+  </div>
+
+  <!-- Tunnel column -->
+  <div class="tunnel-col">
+    <div class="tunnel-label">VPN Tunnel</div>
+    <div class="enc-badge" id="enc-badge">—</div>
+    <div class="tunnel-pipe" id="pipe"></div>
+    <div class="stats-box">
+      <span>Pkts</span>
+      <span class="stats-val" id="pkt2">0</span>
+      <span style="margin-top:4px">RTT</span>
+      <span class="stats-val" id="rtt2">—</span>
+    </div>
+  </div>
+
+  <!-- Server header -->
+  <div class="panel-header server-header">
+    <div class="dot dot-green"></div>
+    <span class="panel-label">Server</span>
+    <span class="panel-addr">10.0.0.1:4500</span>
+  </div>
+
+  <!-- Server messages -->
+  <div class="messages server-msgs" id="server-msgs">
+    <div class="empty-hint">Encrypted packets arrive here.</div>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  const API = 'http://localhost:8000';
+
+  /* ── DOM refs ── */
+  const clientMsgs = document.getElementById('client-msgs');
+  const serverMsgs = document.getElementById('server-msgs');
+  const msgInput   = document.getElementById('msg-input');
+  const urlInput   = document.getElementById('url-input');
+  const methodSel  = document.getElementById('method-sel');
+  const isMsgChk   = document.getElementById('is-msg-chk');
+  const sendBtn    = document.getElementById('send-btn');
+  const pipe       = document.getElementById('pipe');
+  const pktCount   = document.getElementById('pkt-count');
+  const avgRttEl   = document.getElementById('avg-rtt');
+  const pkt2       = document.getElementById('pkt2');
+  const rtt2       = document.getElementById('rtt2');
+  const encBadge   = document.getElementById('enc-badge');
+  const apiDot     = document.getElementById('api-dot');
+  const apiLabel   = document.getElementById('api-label');
+
+  let packets = 0, totalRtt = 0, sending = false;
+
+  /* ── Cipher short labels for the tunnel badge ── */
+  const CIPHER_SHORT = {
+    'AES-256-GCM':       'AES-256',
+    'AES-128-GCM':       'AES-128',
+    'ChaCha20-Poly1305': 'ChaCha20',
+  };
+
+  /* ── Level colours ── */
+  const LEVEL_COLOR = {
+    CRITICAL: '#FF4757', HIGH: '#FF8C00', MEDIUM: '#FFD700', LOW: '#06D6A0',
+  };
+
+  /* ── Animate a dot through the tunnel pipe ── */
+  function animatePacket(dir) {
+    const p = document.createElement('div');
+    p.className = 'pkt-dot ' + (dir === 'out' ? 'pkt-out' : 'pkt-in');
+    pipe.appendChild(p);
+    setTimeout(() => p.remove(), 700);
+  }
+
+  /* ── Add a bubble to a message panel ── */
+  function addMsg(container, opts) {
+    container.querySelectorAll('.empty-hint').forEach(e => e.remove());
+
+    const wrap = document.createElement('div');
+    wrap.className = 'msg-bubble ' + (opts.type === 'sent' ? 'msg-sent' : 'msg-recv');
+
+    /* message text */
+    if (opts.text) {
+      const body = document.createElement('div');
+      body.className = 'msg-text';
+      body.textContent = opts.text;
+      wrap.appendChild(body);
+    }
+
+    /* URL line */
+    if (opts.url) {
+      const urlLine = document.createElement('div');
+      urlLine.className = 'msg-url';
+      urlLine.textContent = '🌐 ' + opts.url;
+      wrap.appendChild(urlLine);
+    }
+
+    /* meta row */
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+
+    /* timestamp */
+    const ts = document.createElement('span');
+    ts.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    meta.appendChild(ts);
+
+    /* sensitivity level pill */
+    if (opts.level) {
+      const pill = document.createElement('span');
+      pill.className = 'lvl-pill lvl-' + opts.level;
+      pill.textContent = opts.level;
+      meta.appendChild(pill);
+    }
+
+    /* RTT pill */
+    if (opts.rtt !== undefined) {
+      const rttPill = document.createElement('span');
+      rttPill.className = 'latency-pill ' + (opts.rtt < 100 ? 'fast' : 'slow');
+      rttPill.textContent = opts.rtt + ' ms';
+      meta.appendChild(rttPill);
+    }
+
+    /* cipher tag (server side only) */
+    if (opts.cipher) {
+      const ct = document.createElement('span');
+      ct.className = 'cipher-tag';
+      ct.textContent = opts.cipher;
+      meta.appendChild(ct);
+    }
+
+    /* reason (server side only) */
+    if (opts.reason) {
+      const rs = document.createElement('span');
+      rs.style.cssText = 'font-size:9px;color:var(--color-text-tertiary);';
+      rs.textContent = opts.reason;
+      meta.appendChild(rs);
+    }
+
+    wrap.appendChild(meta);
+    container.appendChild(wrap);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  /* ── Update API status indicator ── */
+  function setApiStatus(ok) {
+    apiDot.className = 'api-dot ' + (ok ? 'ok' : 'err');
+    apiLabel.textContent = ok ? 'API ok' : 'API offline';
+  }
+
+  /* ── Main send flow ── */
+  async function doSend() {
+    const text   = msgInput.value.trim();
+    const url    = urlInput.value.trim();
+    const method = methodSel.value;
+    const isMsg  = isMsgChk.checked;
+
+    if (!text && !url) return;
+    if (sending) return;
+
+    sending = true;
+    sendBtn.disabled = true;
+    sendBtn.textContent = '…';
+    msgInput.value = '';
+
+    /* Show outgoing bubble on client side immediately */
+    addMsg(clientMsgs, { text, url, type: 'sent' });
+    animatePacket('out');
+
+    const t0 = performance.now();
+
+    try {
+      const res = await fetch(API + '/classify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url:     url    || null,
+          method:  method,
+          body:    text   || null,
+          message: isMsg  ? text : null,
+          is_msg:  isMsg,
+        }),
+      });
+
+      const data = await res.json();
+      const rtt  = Math.round(performance.now() - t0);
+
+      setApiStatus(true);
+
+      /* Update tunnel badge with actual cipher */
+      const cipher = data.profile?.cipher || '—';
+      encBadge.textContent = CIPHER_SHORT[cipher] || cipher;
+      encBadge.style.color       = LEVEL_COLOR[data.level] || '#06D6A0';
+      encBadge.style.borderColor = (LEVEL_COLOR[data.level] || '#06D6A0') + '66';
+      encBadge.style.background  = (LEVEL_COLOR[data.level] || '#06D6A0') + '18';
+
+      /* Animate return packet */
+      animatePacket('in');
+
+      /* Show received bubble on server side */
+      addMsg(serverMsgs, {
+        text,
+        url,
+        type:   'recv',
+        level:  data.level,
+        rtt,
+        cipher: data.profile?.cipher,
+        reason: data.reason,
+      });
+
+      /* Update stats */
+      packets++;
+      totalRtt += rtt;
+      const avg = Math.round(totalRtt / packets);
+      pktCount.textContent = packets;
+      avgRttEl.textContent = avg + ' ms';
+      pkt2.textContent     = packets;
+      rtt2.textContent     = avg + ' ms';
+
+    } catch (err) {
+      setApiStatus(false);
+      animatePacket('in');
+
+      /* Show error on server side */
+      addMsg(serverMsgs, {
+        text,
+        url,
+        type:   'recv',
+        level:  'LOW',
+        reason: '⚠ Backend unreachable — run: uvicorn api.server:app --port 8000',
+      });
+    }
+
+    sending = false;
+    sendBtn.disabled = false;
+    sendBtn.textContent = 'Send ↗';
+    msgInput.focus();
+  }
+
+  sendBtn.addEventListener('click', doSend);
+  msgInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doSend(); } });
+  urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doSend(); } });
+
+  /* ── Ping backend on load to set initial status ── */
+  fetch(API + '/health')
+    .then(r => r.ok ? setApiStatus(true) : setApiStatus(false))
+    .catch(() => setApiStatus(false));
+
+  msgInput.focus();
+})();
+</script>
+
+</body>
+</html>
